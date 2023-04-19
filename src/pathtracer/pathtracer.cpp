@@ -86,7 +86,7 @@ PathTracer::estimate_direct_lighting_hemisphere(const Ray &r,
     if (bvh->intersect(r2, &isect2)) {
       Vector3D f = isect.bsdf->f(w_out, w_in);
       Vector3D L_in = isect2.bsdf->get_emission();
-      L_out += L_in * f * cos_theta(w_in) / (1 / (2 * PI));
+      L_out += L_in * f * abs_cos_theta(w_in) / (1 / (2 * PI));
     }
   }
 
@@ -129,7 +129,7 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
       Vector3D L_in = light->sample_L(hit_p, &wi, &distToLight, &pdf);  // sample_L returns wi in world space
       Vector3D w_in = w2o * wi;  // cos_theta() calculates vectors using object space
       
-      if (cos_theta(w_in) > 0) {
+      if (abs_cos_theta(w_in) > 0) {
         Vector3D d = wi;
         Vector3D o = hit_p;
 
@@ -140,7 +140,7 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
         Intersection isect2;
         if (!bvh->intersect(r2, &isect2)) {
           Vector3D f = isect.bsdf->f(w_out, w_in);
-          L_out += L_in * f * cos_theta(w_in) / pdf;
+          L_out += L_in * f * abs_cos_theta(w_in) / pdf;
         }
       }
     }
@@ -186,8 +186,8 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   // TODO: Part 4, Task 2
   // Returns the one bounce radiance + radiance from extra bounces at this point.
   // Should be called recursively to simulate extra bounces.
-  
-  L_out += one_bounce_radiance(r, isect);
+  if (!isect.bsdf->is_delta())
+    L_out += one_bounce_radiance(r, isect);
 
   Vector3D w_in;
   double pdf;
@@ -203,9 +203,11 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
     r2.min_t = EPS_F;
     Intersection isect2;
 
-    if (cos_theta(w_in) > 0 && bvh->intersect(r2, &isect2)) {
+    if (abs_cos_theta(w_in) > 0 && bvh->intersect(r2, &isect2)) {
       Vector3D L_in = at_least_one_bounce_radiance(r2, isect2);
-      L_out += L_in * f * cos_theta(w_in) / pdf / cpdf;
+      if (isect.bsdf->is_delta())
+        L_in += zero_bounce_radiance(r2, isect2);
+      L_out += L_in * f * abs_cos_theta(w_in) / pdf / cpdf;
     }
   }
 

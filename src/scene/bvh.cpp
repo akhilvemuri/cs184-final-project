@@ -106,7 +106,7 @@ namespace CGL {
             }
 
 
-            float mp_list[] = { x_cnt * (cnt - x_cnt), y_cnt * (cnt - y_cnt), z_cnt * (cnt - z_cnt) };
+            float mp_list[] = { (float)(x_cnt * (cnt - x_cnt)), (float)(y_cnt * (cnt - y_cnt)), (float)(z_cnt * (cnt - z_cnt)) };
             int max_axis = max(mp_list[0], max(mp_list[1], mp_list[2]));
 
             int ind;
