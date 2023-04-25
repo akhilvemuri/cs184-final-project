@@ -84,6 +84,7 @@ PathTracer::estimate_direct_lighting_hemisphere(const Ray &r,
     
     Intersection isect2;
     if (bvh->intersect(r2, &isect2)) {
+      // TODO: ADD COMPUTATION HERE?
       Vector3D f = isect.bsdf->f(w_out, w_in);
       Vector3D L_in = isect2.bsdf->get_emission();
       L_out += L_in * f * abs_cos_theta(w_in) / (1 / (2 * PI));
@@ -144,7 +145,7 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
         }
       }
     }
-
+    // TODO: ADD SOME STUFF HERE
     L_out /= num_samples;
   }
 
