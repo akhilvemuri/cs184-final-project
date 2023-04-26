@@ -184,11 +184,6 @@ namespace CGL {
             else {
                 return has_intersection(ray, node->l) || has_intersection(ray, node->r);
             }
-
-
-
-
-
         }
 
         bool BVHAccel::intersect(const Ray& ray, Intersection* i, BVHNode* node) const {
@@ -213,11 +208,6 @@ namespace CGL {
                 bool b = intersect(ray, i, node->r);
                 return (a || b);
             }
-
-
-
-
-
         }
 
     } // namespace SceneObjects

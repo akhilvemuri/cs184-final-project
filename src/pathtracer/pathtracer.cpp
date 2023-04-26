@@ -133,13 +133,25 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
       if (abs_cos_theta(w_in) > 0) {
         Vector3D d = wi;
         Vector3D o = hit_p;
-
+        
+        // Attempt an Intersect
         Ray r2 = Ray(o, d);
         r2.min_t = EPS_F;
         r2.max_t = distToLight - EPS_F;
-
+        bool blocked = false;
+        for (double i = r2.min_t; i < r2.max_t; i+=0.1) {
+          if (coin_flip(0.015)) {
+            blocked = true;
+          }
+        }
+//        default_random_engine generator;
+//        exponential_distribution<double> distribution (0.15);
+//        double number = distribution(generator);
+//        if (number < r2.max_t) blocked = true;
+        
         Intersection isect2;
-        if (!bvh->intersect(r2, &isect2)) {
+        if (!blocked) blocked = bvh->intersect(r2, &isect2);
+        if (!blocked) {
           Vector3D f = isect.bsdf->f(w_out, w_in);
           L_out += L_in * f * abs_cos_theta(w_in) / pdf;
         }
@@ -156,7 +168,7 @@ Vector3D PathTracer::zero_bounce_radiance(const Ray &r,
                                           const Intersection &isect) {
   // TODO: Part 3, Task 2
   // Returns the light that results from no bounces of light
-  double reduction = pow(0.70,isect.t * 1);
+  double reduction = 1; //pow(0.90,isect.t * 0.5);
   return isect.bsdf->get_emission() * reduction;
 }
 
@@ -165,7 +177,7 @@ Vector3D PathTracer::one_bounce_radiance(const Ray &r,
   // TODO: Part 3, Task 3
   // Returns either the direct illumination by hemisphere or importance sampling
   // depending on `direct_hemisphere_sample`
-  double reduction = pow(0.70,isect.t * 1);
+  double reduction = 1; //pow(0.90,isect.t * 0.5);
   if (direct_hemisphere_sample) {
     return estimate_direct_lighting_hemisphere(r, isect) * reduction;
   } else {
@@ -205,10 +217,19 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
     Intersection isect2;
 
     if (abs_cos_theta(w_in) > 0 && bvh->intersect(r2, &isect2)) {
+      // Simulate Hitting Particle
+      for (double i = 0; i < isect2.t; i+= 0.1) {
+        if (coin_flip(0.015)) {
+          isect2.t = i;
+          isect2.bsdf = new DiffuseBSDF(Vector3D(1,1,1));
+          isect2.n = -r2.d;
+          break;
+        }
+      }
       Vector3D L_in = at_least_one_bounce_radiance(r2, isect2);
       if (isect.bsdf->is_delta())
         L_in += zero_bounce_radiance(r2, isect2);
-      double reduction = pow(0.70,isect.t * 1);
+      double reduction = 1; //pow(0.70,isect.t * 1);
       L_out += L_in * f * abs_cos_theta(w_in) / pdf / cpdf * reduction;
     }
   }
@@ -226,7 +247,23 @@ Vector3D PathTracer::est_radiance_global_illumination(const Ray &r) {
   
   if (!bvh->intersect(r, &isect))
     return envLight ? envLight->sample_dir(r) : L_out;
-
+    
+  // Simulate Hitting Particle
+  for (double i = 0; i < isect.t; i+= 0.1) {
+    if (coin_flip(0.015)) {
+      isect.t = i;
+      isect.bsdf = new DiffuseBSDF(Vector3D(1,1,1));
+      break;
+    }
+  }
+//  default_random_engine generator;
+//  exponential_distribution<double> distribution (0.015);
+//  double number = distribution(generator);
+//  if (number < isect.t) {
+//    isect.t = number;
+//    isect.bsdf = new DiffuseBSDF(Vector3D(1,1,1));
+//  }
+  
   // TODO (Part 3): Return the direct illumination.
   L_out += zero_bounce_radiance(r, isect);
   if (r.depth == 1) {
@@ -237,7 +274,7 @@ Vector3D PathTracer::est_radiance_global_illumination(const Ray &r) {
   else if (r.depth > 1) {
     L_out += at_least_one_bounce_radiance(r, isect);
   }
-  double reduction = pow(0.70,isect.t * 1);
+  double reduction = 1; //pow(0.70,isect.t * 0.5);
   L_out *= reduction;
   return L_out;
 }
