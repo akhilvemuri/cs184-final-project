@@ -151,6 +151,52 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
   return L_out;
 }
 
+Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
+
+  Vector3D L_out;
+
+  for (auto light : scene->lights) {
+    int num_samples;
+    if (light->is_delta_light()) {
+      num_samples = 1;
+    } else {
+      num_samples = ns_area_light;
+    }
+
+    Vector3D wi;  // world space
+    double distToLight;
+    double pdf;
+    
+    for (int n = 0; n < num_samples; n++) {
+      Vector3D L_in = light->sample_L(hit_p, &wi, &distToLight, &pdf);  // sample_L returns wi in world space
+      double cos_theta = - dot(r.d.unit(), wi.unit());
+      double aa = 0.6;
+
+      double idk_stuff =  (1 - aa) * (1 - aa) / (1 + aa * aa - 2 * aa * cos_theta);
+
+      if (idk_stuff > 0) {
+        Vector3D d = wi;
+        Vector3D o = hit_p;
+
+        Ray r2 = Ray(o, d);
+        r2.min_t = EPS_F;
+        r2.max_t = distToLight - EPS_F;
+
+        Intersection isect2;
+        if (!bvh->intersect(r2, &isect2)) {
+          Vector3D f = Vector3D(1, 1, 1) / (2.0 * PI);
+          L_out += L_in * idk_stuff * f / pdf;
+        }
+      }
+    }
+
+    L_out /= num_samples;
+  }
+
+  return L_out;
+  
+}
+
 Vector3D PathTracer::zero_bounce_radiance(const Ray &r,
                                           const Intersection &isect) {
   // TODO: Part 3, Task 2
@@ -164,6 +210,12 @@ Vector3D PathTracer::one_bounce_radiance(const Ray &r,
   // TODO: Part 3, Task 3
   // Returns either the direct illumination by hemisphere or importance sampling
   // depending on `direct_hemisphere_sample`
+
+  double rand_t = -10 * log(random_uniform()) / r.d.norm();
+  if (rand_t < isect.t) {
+    const Vector3D hit_p = r.o + r.d * rand_t;
+    return 1 * estimate_fog(r, hit_p);
+  }
 
   if (direct_hemisphere_sample) {
     return estimate_direct_lighting_hemisphere(r, isect);
@@ -182,6 +234,18 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   Vector3D w_out = w2o * (-r.d);
 
   Vector3D L_out(0, 0, 0);
+
+/*
+  double ray_len = isect.t * r.d.norm();
+  double prob = exp(-ray_len / 20.0);
+  if (coin_flip(prob)) {
+    double rand_t = random_uniform() * isect.t; // todo: EPS_F?
+    const Vector3D hit_p = r.o + r.d * rand_t;
+    return 0.9 * estimate_fog(r, isect);
+  }
+*/
+
+
 
   // TODO: Part 4, Task 2
   // Returns the one bounce radiance + radiance from extra bounces at this point.
