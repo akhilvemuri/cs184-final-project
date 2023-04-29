@@ -172,7 +172,7 @@ Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
       double cos_theta = - dot(r.d.unit(), wi.unit());
       double aa = 0.6;
 
-      double idk_stuff =  (1 - aa) * (1 - aa) / (1 + aa * aa - 2 * aa * cos_theta);
+      double idk_stuff =  10 * (1 - aa) * (1 - aa) / (1 + aa * aa - 2 * aa * cos_theta);
 
       if (idk_stuff > 0) {
         Vector3D d = wi;
@@ -214,7 +214,7 @@ Vector3D PathTracer::one_bounce_radiance(const Ray &r,
   double rand_t = -10 * log(random_uniform()) / r.d.norm();
   if (rand_t < isect.t) {
     const Vector3D hit_p = r.o + r.d * rand_t;
-    return 1 * estimate_fog(r, hit_p);
+    return estimate_fog(r, hit_p);
   }
 
   if (direct_hemisphere_sample) {
@@ -226,6 +226,10 @@ Vector3D PathTracer::one_bounce_radiance(const Ray &r,
 
 Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
                                                   const Intersection &isect) {
+  if (r.depth <= 0) {
+    return Vector3D();
+  }
+  
   Matrix3x3 o2w;
   make_coord_space(o2w, isect.n);
   Matrix3x3 w2o = o2w.T();
@@ -233,46 +237,33 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   Vector3D hit_p = r.o + r.d * isect.t;
   Vector3D w_out = w2o * (-r.d);
 
-  Vector3D L_out(0, 0, 0);
-
-/*
-  double ray_len = isect.t * r.d.norm();
-  double prob = exp(-ray_len / 20.0);
-  if (coin_flip(prob)) {
-    double rand_t = random_uniform() * isect.t; // todo: EPS_F?
-    const Vector3D hit_p = r.o + r.d * rand_t;
-    return 0.9 * estimate_fog(r, isect);
-  }
-*/
-
-
-
   // TODO: Part 4, Task 2
   // Returns the one bounce radiance + radiance from extra bounces at this point.
   // Should be called recursively to simulate extra bounces.
+
+
+  Vector3D L_out = Vector3D();
+  
   if (!isect.bsdf->is_delta())
     L_out += one_bounce_radiance(r, isect);
 
+  double rr_prob = 0.9;
+  if (!coin_flip(rr_prob)) { // russian roulette
+    return L_out;
+  }
+
   Vector3D w_in;
   double pdf;
-  double cpdf = 0.65;
-
-  if (r.depth == max_ray_depth || (coin_flip(cpdf) && r.depth >= 1)) {
-    Vector3D f = isect.bsdf->sample_f(w_out, &w_in, &pdf);
-    Vector3D d = o2w * w_in;
-    Vector3D o = hit_p;
-
-    Ray r2 = Ray(o, d);
-    r2.depth = r.depth - 1;
-    r2.min_t = EPS_F;
-    Intersection isect2;
-
-    if (abs_cos_theta(w_in) > 0 && bvh->intersect(r2, &isect2)) {
-      Vector3D L_in = at_least_one_bounce_radiance(r2, isect2);
-      if (isect.bsdf->is_delta())
-        L_in += zero_bounce_radiance(r2, isect2);
-      L_out += L_in * f * abs_cos_theta(w_in) / pdf / cpdf;
-    }
+  Vector3D reflectance = isect.bsdf->sample_f(w_out, &w_in, &pdf);
+  Ray new_ray = Ray(hit_p, o2w * w_in, (int)(r.depth - 1));
+  new_ray.min_t = EPS_F;
+  Intersection new_isect;
+  double cos_term = fabs(dot(new_ray.d, isect.n)) / isect.n.norm();
+  if (bvh->intersect(new_ray, &new_isect)) {
+    Vector3D L_in = at_least_one_bounce_radiance(new_ray, new_isect);
+    if (isect.bsdf->is_delta())
+      L_in += zero_bounce_radiance(new_ray, new_isect);
+    L_out += L_in * reflectance * cos_term / pdf / rr_prob;
   }
 
   return L_out;
