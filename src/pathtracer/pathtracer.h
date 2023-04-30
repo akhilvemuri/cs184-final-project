@@ -50,6 +50,8 @@ namespace CGL {
         Vector3D estimate_direct_lighting_hemisphere(const Ray& r, const SceneObjects::Intersection& isect);
         Vector3D estimate_direct_lighting_importance(const Ray& r, const SceneObjects::Intersection& isect);
         Vector3D estimate_fog(const Ray& r, const Vector3D hit_p);
+        Vector3D sample_fog(const Vector3D wo, Vector3D* wi, double* pdf);
+      Vector3D fog(const Vector3D wo, const Vector3D wi);
 
         Vector3D est_radiance_global_illumination(const Ray& r);
         Vector3D zero_bounce_radiance(const Ray& r, const SceneObjects::Intersection& isect);

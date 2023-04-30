@@ -151,7 +151,6 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
         }
       }
     }
-
     L_out /= num_samples;
   }
 
@@ -169,18 +168,27 @@ Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
     } else {
       num_samples = ns_area_light;
     }
-
+    
+    // Set up coordinate space.
+    Matrix3x3 o2w;
+    make_coord_space(o2w, r.d.unit() * -1);
+    Matrix3x3 w2o = o2w.T();
+    
     Vector3D wi;  // world space
     double distToLight;
     double pdf;
     
     for (int n = 0; n < num_samples; n++) {
       Vector3D L_in = light->sample_L(hit_p, &wi, &distToLight, &pdf);
-      double cos_theta = dot(r.d.unit(), wi.unit());
+      Vector3D w_in = w2o * wi;
+      
+      
       double aa = 0.9;
-
-      double idk_stuff =  ((1 - aa * aa) / pow(1.0 + aa * aa - 2.0 * aa * cos_theta, 1.5)) / 2;
-
+      double idk_stuff =  ((1 - aa * aa) / pow(1.0 + aa * aa + 2.0 * aa * cos_theta(w_in), 1.5)) * (1 / (4 * PI));
+      
+      // Slight Balancing.
+      // idk_stuff /= (1 + aa) * (1 + aa);
+      
       if (idk_stuff > 0) {
         Vector3D d = wi;
         Vector3D o = hit_p;
@@ -188,27 +196,57 @@ Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
         Ray r2 = Ray(o, d);
         r2.min_t = EPS_F;
         r2.max_t = distToLight - EPS_F;
-
+        
+        // Determine if Light Ray is shadowed.
         Intersection isect2;
-        if (!bvh->intersect(r2, &isect2)) {
-          Vector3D f = Vector3D(1, 1, 1) / (2.0 * PI);
-          L_out += L_in * idk_stuff * f / pdf;
+        bool objIntersect = bvh->intersect(r2, &isect2);
+        if (!objIntersect) {
+          double rand_t = -1 * (log(1 - random_uniform()) / 0.30);
+          objIntersect = rand_t < r2.max_t;
+        }
+
+        if (!objIntersect) {
+          L_out += L_in * idk_stuff * abs_cos_theta(w_in) / pdf;
         }
       }
     }
-
     L_out /= num_samples;
   }
-
   return L_out;
-  
 }
+
+Vector3D PathTracer::fog(const Vector3D wo, const Vector3D wi) {
+  double aa = -0.9;
+  double idk_stuff =  ((1 - aa * aa) / pow(1.0 + aa * aa + 2.0 * aa * cos_theta(wi), 1.5)) * (1 / (4 * PI));
+  return Vector3D(1,1,1) * idk_stuff;
+}
+
+Vector3D PathTracer::sample_fog(const Vector3D wo, Vector3D* wi, double* pdf) {
+  
+  // Sample wi
+  double g = 0.9;
+  double e1 = random_uniform();
+  double e2 = random_uniform();
+  *wi = hemisphereSampler->get_sample();
+  //double mu = (1.0 / (2.0 * g)) * (1 + pow(g, 2.0) - pow((1.0 - pow(g, 2.0)) / (1.0 - g + 2.0 * g * e1), 2.0));
+  //double phi = e2 * 2 * PI;
+  //*wi = Vector3D(cos(phi) * (1-mu), sin(phi) * (1 - mu), mu).unit();
+  //cout << *wi << "\n";
+  
+  // Compute pdf + Return f
+  //*pdf = 1.0 / (2.0 * PI);
+  double magic = (((1 - g * g) / pow(1.0 + g * g + 2.0 * g * cos_theta(*wi), 1.5)) * (1 / (4 * PI)));
+  if (magic <= 0 ) magic = 0.00001;
+  *pdf = 1 / magic;
+  return Vector3D(1.0, 1.0, 1.0);
+}
+
 
 Vector3D PathTracer::zero_bounce_radiance(const Ray &r,
                                           const Intersection &isect) {
   // TODO: Part 3, Task 2
-  // Returns the light that results from no bounces of light
-
+  // Returns the light that results from no bou nces of light
+  
   return isect.bsdf->get_emission();
 }
 
@@ -245,9 +283,13 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   
   // Compute Initial Radiance. For fog or other scene object.
   double rand_t = -1 * (log(1 - random_uniform()) / 0.30);
+  bool isFog = false;
   if (rand_t < isect.t) {
     hit_p = r.o + r.d * rand_t;
     L_out += estimate_fog(r, hit_p);
+    make_coord_space(o2w, -1 * r.d);
+    Matrix3x3 w2o = o2w.T();
+    isFog = true;
   } else {
     if (!isect.bsdf->is_delta()) L_out += one_bounce_radiance(r, isect);
   }
@@ -263,7 +305,9 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   double cpdf = 0.65;
 
   if (r.depth == max_ray_depth || (coin_flip(cpdf) && r.depth >= 1)) {
-    Vector3D f = isect.bsdf->sample_f(w_out, &w_in, &pdf);
+    Vector3D f = 0;
+    if (isFog) f = sample_fog(w_out, &w_in, &pdf);
+    else f = isect.bsdf->sample_f(w_out, &w_in, &pdf);
     Vector3D d = o2w * w_in;
     Vector3D o = hit_p;
 
