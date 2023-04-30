@@ -152,13 +152,13 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
 }
 
 double rand_fog_t(const Ray &r) {
-  return -2 * log(random_uniform()) / r.d.norm();
+  return -10 * log(random_uniform()) / r.d.norm();
 }
 
 
 Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
-  double cos_theta = - dot(wo.unit(), wi.unit());
-  double aa = 0.4;
+  double cos_theta = dot(wo.unit(), wi.unit());
+  double aa = 0.6;
   double idk_stuff = (1 - aa * aa) / pow(1 + aa * aa - 2 * aa * cos_theta, 1.5);
 
   return Vector3D(1,1,1) * idk_stuff / (4.0 * PI);
@@ -208,7 +208,7 @@ Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
 
       Intersection isect2;
       if (!bvh->intersect(r2, &isect2)) {
-        L_out += L_in * fog_f(r.d, wi) / pdf;
+        L_out += L_in * fog_f(-r.d, wi) / pdf;
       }
       
     }
