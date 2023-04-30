@@ -151,6 +151,35 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
   return L_out;
 }
 
+double rand_fog_t(const Ray &r) {
+  return -2 * log(random_uniform()) / r.d.norm();
+}
+
+
+Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
+  double cos_theta = - dot(wo.unit(), wi.unit());
+  double aa = 0.4;
+  double idk_stuff = (1 - aa * aa) / pow(1 + aa * aa - 2 * aa * cos_theta, 1.5);
+
+  return Vector3D(1,1,1) * idk_stuff / (4.0 * PI);
+}
+
+
+Vector3D sample_fog(const Vector3D wo, Vector3D* wi, double* pdf) {
+  
+  double z = random_uniform() * 2 - 1;
+  double sinTheta = sqrt(std::max(0.0, 1.0f - z * z));
+
+  double phi = 2.0f * PI * random_uniform();
+
+  *wi = Vector3D(cos(phi) * sinTheta, sin(phi) * sinTheta, z);
+  *pdf = 1.0 / (4.0 * PI);
+
+  return abs_cos_theta(*wi) * fog_f(wo, *wi);
+  // abs_cos_theta to cancel out division
+  // really should be in f function but we don't do costheta thing in estimate_fog
+}
+
 Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
 
   Vector3D L_out;
@@ -169,25 +198,19 @@ Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
     
     for (int n = 0; n < num_samples; n++) {
       Vector3D L_in = light->sample_L(hit_p, &wi, &distToLight, &pdf);  // sample_L returns wi in world space
-      double cos_theta = - dot(r.d.unit(), wi.unit());
-      double aa = 0.6;
 
-      double idk_stuff =  10 * (1 - aa) * (1 - aa) / (1 + aa * aa - 2 * aa * cos_theta);
+      Vector3D d = wi;
+      Vector3D o = hit_p;
 
-      if (idk_stuff > 0) {
-        Vector3D d = wi;
-        Vector3D o = hit_p;
+      Ray r2 = Ray(o, d);
+      r2.min_t = EPS_F;
+      r2.max_t = distToLight - EPS_F;
 
-        Ray r2 = Ray(o, d);
-        r2.min_t = EPS_F;
-        r2.max_t = distToLight - EPS_F;
-
-        Intersection isect2;
-        if (!bvh->intersect(r2, &isect2)) {
-          Vector3D f = Vector3D(1, 1, 1) / (2.0 * PI);
-          L_out += L_in * idk_stuff * f / pdf;
-        }
+      Intersection isect2;
+      if (!bvh->intersect(r2, &isect2)) {
+        L_out += L_in * fog_f(r.d, wi) / pdf;
       }
+      
     }
 
     L_out /= num_samples;
@@ -202,6 +225,10 @@ Vector3D PathTracer::zero_bounce_radiance(const Ray &r,
   // TODO: Part 3, Task 2
   // Returns the light that results from no bounces of light
 
+  double rand_t = rand_fog_t(r);
+  if (rand_t < isect.t) {
+    return Vector3D();
+  }
   return isect.bsdf->get_emission();
 }
 
@@ -211,7 +238,7 @@ Vector3D PathTracer::one_bounce_radiance(const Ray &r,
   // Returns either the direct illumination by hemisphere or importance sampling
   // depending on `direct_hemisphere_sample`
 
-  double rand_t = -10 * log(random_uniform()) / r.d.norm();
+  double rand_t = rand_fog_t(r);
   if (rand_t < isect.t) {
     const Vector3D hit_p = r.o + r.d * rand_t;
     return estimate_fog(r, hit_p);
@@ -254,11 +281,20 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
 
   Vector3D w_in;
   double pdf;
-  Vector3D reflectance = isect.bsdf->sample_f(w_out, &w_in, &pdf);
+  Vector3D reflectance;
+
+  double rand_t = rand_fog_t(r);
+  if (rand_t < isect.t) {
+    const Vector3D hit_fog = r.o + r.d * rand_t;
+    reflectance = sample_fog(w_out, &w_in, &pdf);
+  } else {
+    reflectance = isect.bsdf->sample_f(w_out, &w_in, &pdf);
+  }
+
   Ray new_ray = Ray(hit_p, o2w * w_in, (int)(r.depth - 1));
   new_ray.min_t = EPS_F;
   Intersection new_isect;
-  double cos_term = fabs(dot(new_ray.d, isect.n)) / isect.n.norm();
+  double cos_term = abs_cos_theta(w_in);
   if (bvh->intersect(new_ray, &new_isect)) {
     Vector3D L_in = at_least_one_bounce_radiance(new_ray, new_isect);
     if (isect.bsdf->is_delta())
