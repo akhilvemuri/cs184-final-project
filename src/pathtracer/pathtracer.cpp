@@ -44,6 +44,51 @@ void PathTracer::write_to_framebuffer(ImageBuffer &framebuffer, size_t x0,
   sampleBuffer.toColor(framebuffer, x0, y0, x1, y1);
 }
 
+
+double rand_fog_t(const Ray &r) {
+  double fog_amt = 0.1;
+  return - log(random_uniform()) / fog_amt / r.d.norm();
+}
+
+double prob_fog_t_less_than(const Ray &r, double t) {
+  double fog_amt = 0.1;
+  return exp(- t * fog_amt * r.d.norm());
+}
+
+Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
+  double cos_theta = dot(wo.unit(), wi.unit());
+  double g = 0.6;
+  double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * cos_theta, 1.5);
+
+  return Vector3D(1,1,1) * idk_stuff / (4.0 * PI);
+}
+
+
+Vector3D sample_fog(const Vector3D wo, Vector3D* wi, double* pdf) {
+  double g = 0.6;
+  double inner = (1 - g * g) / (1 - g + 2 * g * random_uniform());
+  double z = (1 / (2 * g)) * (1 + g * g - inner * inner);
+  double sinTheta = sqrt(std::max(0.0, 1.0f - z * z));
+
+  double phi = 2.0f * PI * random_uniform();
+
+  // relative_dir is relative to wo, where (0, 0, 1) is wo
+  // need to transform to "world" coordinates 
+  double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * z, 1.5);
+  Vector3D relative_dir = Vector3D(cos(phi) * sinTheta, sin(phi) * sinTheta, z);
+
+  Matrix3x3 o2w;
+  make_coord_space(o2w, wo);
+  *wi = o2w * relative_dir;
+  *pdf = idk_stuff / (4.0 * PI); // should cancel out fog_f
+
+  // cout << "cheese " << relative_dir <<  " " << *pdf << " " << fog_f(wo, *wi) << "\n";
+
+  return fog_f(wo, *wi) / abs_cos_theta(*wi);
+  // divide by abs_cos_theta to cancel it out
+  // really should be in f function but we don't do costheta thing in estimate_fog
+}
+
 Vector3D
 PathTracer::estimate_direct_lighting_hemisphere(const Ray &r,
                                                 const Intersection &isect) {
@@ -139,8 +184,9 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
 
         Intersection isect2;
         if (!bvh->intersect(r2, &isect2)) {
+          double prob_no_fog = 1 - prob_fog_t_less_than(r2, distToLight);
           Vector3D f = isect.bsdf->f(w_out, w_in);
-          L_out += L_in * f * abs_cos_theta(w_in) / pdf;
+          L_out += L_in * f * abs_cos_theta(w_in) * prob_no_fog / pdf;
         }
       }
     }
@@ -149,46 +195,6 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
   }
 
   return L_out;
-}
-
-double rand_fog_t(const Ray &r) {
-  double fog_amt = 0.1;
-  return - log(random_uniform()) / fog_amt / r.d.norm();
-}
-
-
-Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
-  double cos_theta = dot(wo.unit(), wi.unit());
-  double g = 0.6;
-  double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * cos_theta, 1.5);
-
-  return Vector3D(1,1,1) * idk_stuff / (4.0 * PI);
-}
-
-
-Vector3D sample_fog(const Vector3D wo, Vector3D* wi, double* pdf) {
-  double g = 0.6;
-  double inner = (1 - g * g) / (1 - g + 2 * g * random_uniform());
-  double z = (1 / (2 * g)) * (1 + g * g - inner * inner);
-  double sinTheta = sqrt(std::max(0.0, 1.0f - z * z));
-
-  double phi = 2.0f * PI * random_uniform();
-
-  // relative_dir is relative to wo, where (0, 0, 1) is wo
-  // need to transform to "world" coordinates 
-  double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * z, 1.5);
-  Vector3D relative_dir = Vector3D(cos(phi) * sinTheta, sin(phi) * sinTheta, z);
-
-  Matrix3x3 o2w;
-  make_coord_space(o2w, wo);
-  *wi = o2w * relative_dir;
-  *pdf = idk_stuff / (4.0 * PI); // should cancel out fog_f
-
-  // cout << "cheese " << relative_dir <<  " " << *pdf << " " << fog_f(wo, *wi) << "\n";
-
-  return fog_f(wo, *wi) / abs_cos_theta(*wi);
-  // divide by abs_cos_theta to cancel it out
-  // really should be in f function but we don't do costheta thing in estimate_fog
 }
 
 Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
@@ -219,7 +225,8 @@ Vector3D PathTracer::estimate_fog(const Ray &r, const Vector3D hit_p) {
 
       Intersection isect2;
       if (!bvh->intersect(r2, &isect2)) {
-        L_out += L_in * fog_f(-r.d, wi) / pdf;
+        double prob_no_fog = 1 - prob_fog_t_less_than(r2, distToLight);
+        L_out += L_in * fog_f(-r.d, wi) * prob_no_fog / pdf;
       }
       
     }
