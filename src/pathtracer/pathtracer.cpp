@@ -152,31 +152,42 @@ PathTracer::estimate_direct_lighting_importance(const Ray &r,
 }
 
 double rand_fog_t(const Ray &r) {
-  return -10 * log(random_uniform()) / r.d.norm();
+  double fog_amt = 0.1;
+  return - log(random_uniform()) / fog_amt / r.d.norm();
 }
 
 
 Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
   double cos_theta = dot(wo.unit(), wi.unit());
-  double aa = 0.6;
-  double idk_stuff = (1 - aa * aa) / pow(1 + aa * aa - 2 * aa * cos_theta, 1.5);
+  double g = 0.6;
+  double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * cos_theta, 1.5);
 
   return Vector3D(1,1,1) * idk_stuff / (4.0 * PI);
 }
 
 
 Vector3D sample_fog(const Vector3D wo, Vector3D* wi, double* pdf) {
-  
-  double z = random_uniform() * 2 - 1;
+  double g = 0.6;
+  double inner = (1 - g * g) / (1 - g + 2 * g * random_uniform());
+  double z = (1 / (2 * g)) * (1 + g * g - inner * inner);
   double sinTheta = sqrt(std::max(0.0, 1.0f - z * z));
 
   double phi = 2.0f * PI * random_uniform();
 
-  *wi = Vector3D(cos(phi) * sinTheta, sin(phi) * sinTheta, z);
-  *pdf = 1.0 / (4.0 * PI);
+  // relative_dir is relative to wo, where (0, 0, 1) is wo
+  // need to transform to "world" coordinates 
+  double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * z, 1.5);
+  Vector3D relative_dir = Vector3D(cos(phi) * sinTheta, sin(phi) * sinTheta, z);
 
-  return abs_cos_theta(*wi) * fog_f(wo, *wi);
-  // abs_cos_theta to cancel out division
+  Matrix3x3 o2w;
+  make_coord_space(o2w, wo);
+  *wi = o2w * relative_dir;
+  *pdf = idk_stuff / (4.0 * PI); // should cancel out fog_f
+
+  // cout << "cheese " << relative_dir <<  " " << *pdf << " " << fog_f(wo, *wi) << "\n";
+
+  return fog_f(wo, *wi) / abs_cos_theta(*wi);
+  // divide by abs_cos_theta to cancel it out
   // really should be in f function but we don't do costheta thing in estimate_fog
 }
 
