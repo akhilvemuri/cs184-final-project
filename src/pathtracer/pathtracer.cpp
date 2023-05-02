@@ -49,18 +49,18 @@ void PathTracer::write_to_framebuffer(ImageBuffer &framebuffer, size_t x0,
 
 #ifdef FOG_ON
 double rand_fog_t(const Ray &r) {
-  double fog_amt = 0.5;
+  double fog_amt = 0.2;
   return - log(random_uniform()) / fog_amt / r.d.norm();
 }
 
 double prob_fog_t_greater_than(const Ray &r, double t) {
-  double fog_amt = 0.5;
+  double fog_amt = 0.2;
   return exp(- t * fog_amt * r.d.norm());
 }
 
 Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
   double cos_theta = dot(wo.unit(), wi.unit());
-  double g = 0.6;
+  double g = -0.6;
   double idk_stuff = (1 - g * g) / pow(1 + g * g - 2 * g * cos_theta, 1.5);
 
   return Vector3D(1,1,1) * idk_stuff / (4.0 * PI);
@@ -68,7 +68,7 @@ Vector3D fog_f(const Vector3D wo, const Vector3D wi) {
 
 
 Vector3D sample_fog(const Vector3D wo, Vector3D* wi, double* pdf) {
-  double g = 0.6;
+  double g = -0.6;
   double inner = (1 - g * g) / (1 - g + 2 * g * random_uniform());
   double z = (1 / (2 * g)) * (1 + g * g - inner * inner);
   double sinTheta = sqrt(std::max(0.0, 1.0f - z * z));
