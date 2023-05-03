@@ -200,30 +200,32 @@ Ray Camera::generate_ray(double x, double y) const {
   //
 
   // 1. Find the coordinate of (x,y) in the camera space
-    // Coordinate of (0,0) in the original image (convert angle to radian) 
+  // Coordinate of (0,0) in the original image (convert angle to radian)
 
-    float sensor_bl_x = -tan(0.5 * hFov * M_PI / 180);
-    float sensor_bl_y = -tan(0.5 * vFov * M_PI / 180);
+  float sensor_bl_x = -tan(0.5 * hFov * M_PI / 180);
+  float sensor_bl_y = -tan(0.5 * vFov * M_PI / 180);
 
-    // Coordinate of (1,1) in the original image (convert angle to radian) 
+  // Coordinate of (1,1) in the original image (convert angle to radian)
 
-    float sensor_tr_x = tan(0.5 * hFov * M_PI / 180);
-    float sensor_tr_y = tan(0.5 * vFov * M_PI / 180);
+  float sensor_tr_x = tan(0.5 * hFov * M_PI / 180);
+  float sensor_tr_y = tan(0.5 * vFov * M_PI / 180);
 
-    float x_increment = x * (sensor_tr_x - sensor_bl_x);
+  float x_increment = x * (sensor_tr_x - sensor_bl_x);
 
-    float y_increment = y * (sensor_tr_y - sensor_bl_y);
+  float y_increment = y * (sensor_tr_y - sensor_bl_y);
 
-    // Intersection of the camera ray and the sensor
-    Vector3D intersection = Vector3D(sensor_bl_x + x_increment, sensor_bl_y + y_increment, -1);
-    
+  // Intersection of the camera ray and the sensor
+  Vector3D intersection = Vector3D(sensor_bl_x + x_increment, sensor_bl_y + y_increment, -1);
+  
   // 2. Transform from camera space to world space
-    Vector3D direction = c2w * (intersection);
-    direction = direction / direction.norm();
-    Ray camera_ray = Ray(pos, direction);
-    camera_ray.min_t = nClip;
-    camera_ray.max_t = fClip;
-
+  Vector3D direction = c2w * (intersection);
+  direction = direction / direction.norm();
+  Ray camera_ray = Ray(pos, direction);
+  camera_ray.min_t = nClip;
+  camera_ray.max_t = fClip;
+  
+  // Will remove later. Just sanity checking.
+  camera_ray.fog_density = 0;
   return camera_ray;
 
 }

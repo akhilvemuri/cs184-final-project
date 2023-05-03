@@ -26,6 +26,7 @@ struct Ray {
   mutable double max_t; ///< treat the ray as a segment (ray "ends" at max_t)
 
   Vector3D inv_d;  ///< component wise inverse
+  mutable double fog_density; ///Fog density of the current ray.
 
   Ray() {}
 
@@ -37,7 +38,7 @@ struct Ray {
    * \param depth depth of the ray
    */
     Ray(const Vector3D o, const Vector3D d, int depth = 0)
-        : o(o), d(d), min_t(0.0), max_t(INF_D), depth(depth) {
+        : o(o), d(d), min_t(0.0), max_t(INF_D), depth(depth), fog_density(0.0) {
     inv_d = 1.0 / d;
   }
 
@@ -50,7 +51,7 @@ struct Ray {
    * \param depth depth of the ray
    */
     Ray(const Vector3D o, const Vector3D d, double max_t, int depth = 0)
-        : o(o), d(d), min_t(0.0), max_t(max_t), depth(depth) {
+        : o(o), d(d), min_t(0.0), max_t(max_t), depth(depth), fog_density(0.0) {
     inv_d = 1.0 / d;
   }
 

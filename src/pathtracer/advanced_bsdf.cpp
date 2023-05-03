@@ -39,6 +39,32 @@ namespace CGL {
         }
     }
 
+// Fog BSDF //
+
+    Vector3D FogBSDF::f(const Vector3D wo, const Vector3D wi) {
+        return Vector3D();
+    }
+
+    Vector3D FogBSDF::sample_f(const Vector3D wo, Vector3D* wi, double* pdf) {
+        *wi = -1.0 * wo;
+        *pdf = 1.0;
+        return Vector3D(1.0, 1.0, 1.0) / abs_cos_theta(*wi);
+    }
+
+    void FogBSDF::render_debugger_node()
+    {
+        if (ImGui::TreeNode(this, "Fog BSDF"))
+        {
+            DragDouble3("Fog Density", &fog_density, 0.005);
+            ImGui::TreePop();
+        }
+    }
+
+    double FogBSDF::get_fog_density(const Vector3D wo) {
+      if (wo.z == 0) return 0;
+      return (wo.z > 0) ? fog_density : -1 * fog_density;
+    }
+
 // Microfacet BSDF //
 
     double MicrofacetBSDF::G(const Vector3D wo, const Vector3D wi) {

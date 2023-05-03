@@ -98,6 +98,8 @@ class BSDF {
    * scattered.
    */
   virtual bool is_delta() const = 0;
+  
+  virtual double get_fog_density(const Vector3D wo) {return 0.0;}
 
   virtual void render_debugger_node() {};
 
@@ -264,6 +266,31 @@ class GlassBSDF : public BSDF {
   Vector3D transmittance;
 
 }; // class GlassBSDF
+
+/**
+ * Fog BSDF.
+ */
+class FogBSDF : public BSDF {
+ public:
+
+  FogBSDF(double fog_density) : fog_density(fog_density) { }
+
+  Vector3D f(const Vector3D wo, const Vector3D wi);
+  Vector3D sample_f(const Vector3D wo, Vector3D* wi, double* pdf);
+  Vector3D get_emission() const { return Vector3D(); }
+  bool is_delta() const { return true; }
+  double get_fog_density(const Vector3D wo);
+
+  void render_debugger_node();
+
+ private:
+  double fog_density;
+  
+  // Maybe for later.
+  // Vector3D transmittance;
+
+}; // class FogBSDF
+
 
 /**
  * Emission BSDF.

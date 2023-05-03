@@ -922,6 +922,11 @@ void ColladaParser::parse_material ( XMLElement* xml, MaterialInfo& material ) {
           float ior = atof(e_ior->GetText());
           BSDF* bsdf = new GlassBSDF(transmittance, reflectance, roughness, ior);
           material.bsdf = bsdf;
+        } else if (type == "fog") {
+          XMLElement *e_fog_density  = get_element(e_bsdf, "fog_density");
+          float fog_density = atof(e_fog_density->GetText());
+          BSDF* bsdf = new FogBSDF(fog_density);
+          material.bsdf = bsdf;
         }
         e_bsdf = e_bsdf->NextSiblingElement();
       }
