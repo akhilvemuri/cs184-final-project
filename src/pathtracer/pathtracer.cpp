@@ -264,7 +264,15 @@ Vector3D PathTracer::one_bounce_radiance(const Ray &r,
   // TODO: Part 3, Task 3
   // Returns either the direct illumination by hemisphere or importance sampling
   // depending on `direct_hemisphere_sample`
-
+  
+  #ifdef FOG_ON
+  double fog_isect = rand_fog_t(r);
+  if (fog_isect < isect.t) {
+    Vector3D hit_p = r.o + r.d * fog_isect;
+    return estimate_fog(r, hit_p);
+  }
+  #endif
+  
   if (direct_hemisphere_sample) {
     return estimate_direct_lighting_hemisphere(r, isect);
   } else {
@@ -293,17 +301,7 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   Vector3D L_out = Vector3D();
   
   if (!isect.bsdf->is_delta()) {
-    #ifdef FOG_ON
-    double fog_isect = rand_fog_t(r);
-    if (fog_isect < isect.t) {
-      hit_p = r.o + r.d * fog_isect;
-      L_out += estimate_fog(r, hit_p);
-    } else {
-      L_out += one_bounce_radiance(r, isect);
-    }
-    #else
     L_out += one_bounce_radiance(r, isect);
-    #endif
   }
 
   double rr_prob = 0.9;
@@ -316,8 +314,10 @@ Vector3D PathTracer::at_least_one_bounce_radiance(const Ray &r,
   Vector3D reflectance;
 
   #ifdef FOG_ON
-  if (!(hit_p == r.o + r.d * isect.t)) {
-    reflectance = sample_fog(w_out, &w_in, &pdf) * 10;
+  double fog_isect = rand_fog_t(r);
+  if (fog_isect < isect.t) {
+    const Vector3D hit_fog = r.o + r.d * fog_isect;
+    reflectance = sample_fog(w_out, &w_in, &pdf);
   } else {
     reflectance = isect.bsdf->sample_f(w_out, &w_in, &pdf);
   }
@@ -357,11 +357,11 @@ Vector3D PathTracer::est_radiance_global_illumination(const Ray &r) {
 
 
   L_out += zero_bounce_radiance(r, isect);
-//  if (r.depth == 1) {
-//    L_out += one_bounce_radiance(r, isect);
-//  }
+  if (r.depth == 1) {
+    L_out += one_bounce_radiance(r, isect);
+  }
 
-  if (r.depth >= 1) {
+  if (r.depth > 1) {
     L_out += at_least_one_bounce_radiance(r, isect);
   }
 
